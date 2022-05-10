@@ -8,11 +8,14 @@ from flask import Flask, request
 from checker import Checker, InfluxDataBackbone
 
 app = Flask(__name__)
+port = getenv("SERVER_PORT", 5000)
 
 c = Checker(InfluxDataBackbone(
     getenv("NODE_INFLUXDB_URL", "http://wes-node-influxdb:8086"),
     getenv("NODE_INFLUXDB_QUERY_TOKEN", "")
 ))
+
+
 
 
 def generate_result(rule, success, message):
@@ -36,4 +39,4 @@ def evaluate():
         
 
 if __name__ == "__main__":
-    app.run(host='0.0.0.0')
+    app.run(host='0.0.0.0', port=port)
