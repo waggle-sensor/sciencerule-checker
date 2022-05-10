@@ -1,4 +1,5 @@
 flask
 redis
-numpy
+numpy>=1.19.2 # required by pandas >= 1.4.2
 pandas
+influxdb-client
