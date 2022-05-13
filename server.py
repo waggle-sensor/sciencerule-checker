@@ -16,8 +16,6 @@ c = Checker(InfluxDataBackbone(
 ))
 
 
-
-
 def generate_result(rule, success, message):
     return {
         "response": "success" if success else "failed",

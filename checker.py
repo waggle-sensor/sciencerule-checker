@@ -60,6 +60,8 @@ class InfluxDataBackbone(DataBackbone):
         client = self.get_influx_client()
         query = self.query_builder(name, **meta)
         df = client.query_api().query_data_frame(query)
+        if type(df) == list:
+            df = pd.concat(df)
         return self.convert_to_api_record(df)
 
 class Checker():
@@ -68,16 +70,27 @@ class Checker():
     
     def get_supported_funcs(self):
         return {
-            "hour": self.current_hour,
             "v": self.get_measurements,
+            "avg": self.avg,
+            "time": self.time,
         }
 
-    def current_hour(self):
-        return datetime.datetime.now().hour
+    def time(self, unit):
+        try:
+            return datetime.datetime.now().__getattribute__(unit)
+        except:
+            raise Exception(f'{unit} is not supported for time()')
+
+    def avg(self, array):
+        return np.average(array)
 
     def get_measurements(self, name, **meta):
         df = self.backbone.get_measurements(name, **meta)
-        return np.array([m["value"] for _, m in df.iterrows() if m["name"] == name and self.matchmeta(meta, m["meta"])])
+        data = np.array([m["value"] for _, m in df.iterrows() if m["name"] == name and self.matchmeta(meta, m["meta"])])
+        if len(data) < 1:
+            raise Exception(f'no data for {name} with meta {meta} found')
+        else:
+            return data
 
     def matchmeta(self, pattern: dict, meta):
         return all(k in meta and meta[k] == v for k, v in pattern.items())
@@ -86,9 +99,9 @@ class Checker():
         l = self.get_supported_funcs()
         try:
             r = eval(rule, None, l)
-            if len(r) < 1:
-                return False, "rule produced None"
-            else:   
-                return True, all(r)
+            if isinstance(r, bool) or isinstance(r, np.bool_):
+                return True, bool(r)
+            else:
+                return False, f'rule produced not True/False: {str(r)}'
         except Exception as ex:
             return False, str(ex)
