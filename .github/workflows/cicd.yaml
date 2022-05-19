@@ -5,8 +5,20 @@ on:
     types: [published]
 
 jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [3.6, 3.7, 3.8, 3.9]
+    steps:
+      - name: Install dependencies
+        run: pip3 install -r requirements.txt
+      - name: Test package
+        run: python3 -m unittest discover tests
   push_to_registry:
     runs-on: ubuntu-latest
+    needs: test
     steps:
       - name: Get release version
         run: echo "RELEASE_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
