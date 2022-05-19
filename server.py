@@ -23,6 +23,12 @@ def generate_result(rule, success, message):
         "result" if success else "error": message,
     }
 
+@app.route("/listrules", methods=["GET"])
+def listrules():
+    return {
+        "response": "success",
+        "rules": c.get_supported_funcs().keys()
+    }
 
 @app.route("/evaluate", methods=["POST"])
 def evaluate():
