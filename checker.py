@@ -15,7 +15,11 @@ class FakeDataBackbone(DataBackbone):
         self.data = pd.DataFrame(measurements)
 
     def get_measurements(self, name, last=False, **meta) -> pd.DataFrame:
-        return self.data
+        if meta.get("_value") not in [None, ""]:
+            v = meta.pop("_value")
+            meta["value"] = v
+            return self.data[(self.data.name==name) & (self.data.value==v)]
+        return self.data[self.data.name==name]
 
 class InfluxDataBackbone(DataBackbone):
     def __init__(self, influx_url, influx_token, influx_org='waggle', influx_bucket='waggle'):
@@ -66,6 +70,13 @@ class InfluxDataBackbone(DataBackbone):
             df = pd.concat(df)
         return self.convert_to_api_record(df)
 
+# class RedixDataBackbone(DataBackbone):
+#     def __init__(self, redix_url):
+#         self.data = pd.DataFrame(measurements)
+
+#     def get_measurements(self, name, last=False, **meta) -> pd.DataFrame:
+#         return self.data
+
 class Checker():
     def __init__(self, backbone):
         self.backbone = backbone
@@ -76,6 +87,7 @@ class Checker():
             "avg": self.avg,
             "time": self.time,
             "cronjob": self.cronjob,
+            "after": self.after,
         }
 
     def time(self, unit):
@@ -84,12 +96,22 @@ class Checker():
         except:
             raise Exception(f'{unit} is not supported for time()')
 
+    # after returns True/False based on the last successful execution of given plugin
+    # it returns True if the last execution is earlier than now + interval and returns False otherwise
+    # if no execution found, it returns False
+    def after(self, name, interval=0):
+        now = datetime.datetime.now(datetime.timezone.utc)
+        df = self.backbone.get_measurements("sys.scheduler.plugin.lastexecution", last=True, _value=name)
+        for _, p in df.iterrows():
+            return (now - datetime.timedelta(seconds=interval)) > p.timestamp
+        return False
+
     def avg(self, array):
         return np.average(array)
 
     def cronjob(self, name, expr):
         # Accepting the cronjob pattern (minute hour day month year)
-        # for example cronjob("30 * * * *")
+        # for example cronjob("imagesampler", "30 * * * *")
         if not croniter.is_valid(expr):
             raise Exception(f'pattern {expr} is not supported')
         now = datetime.datetime.now(datetime.timezone.utc)

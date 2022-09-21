@@ -4,7 +4,7 @@ import unittest
 from checker import Checker, FakeDataBackbone
 
 
-class TestChecker(unittest.TestCase):
+class TestCheckerFunctions(unittest.TestCase):
     def test_simple(self):
         measurements = [
             {"name": "env.temperature", "value": 23.1, "meta": {"sensor": "bme680"}},
@@ -29,6 +29,25 @@ class TestChecker(unittest.TestCase):
         _, result = self.checker.evaluate("cronjob('myplugin', '* * * * *')")
         self.assertEqual(result, True)
 
+    def test_after(self):
+        last_2_minutes = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=2)
+        measurements = [
+            {"timestamp": last_2_minutes, "name": "sys.scheduler.plugin.lastexecution", "value": "myplugin", "meta": {}},
+        ]
+        backbone = FakeDataBackbone(measurements)
+        self.checker = Checker(backbone)
+        # Check if notmyplugin ran before False is expected because notmyplugin has not been run
+        _, result = self.checker.evaluate(f'after("notmyplugin")')
+        self.assertEqual(result, False)
+        # Check if myplugin ran before True is expected
+        _, result = self.checker.evaluate(f'after("myplugin")')
+        self.assertEqual(result, True)
+        # Check if myplugin ran in the last 119 seconds True is expected as the myplugin ran 120 seconds ago
+        _, result = self.checker.evaluate(f'after("myplugin", 119)')
+        self.assertEqual(result, True)
+        # Check if myplugin ran in the last 121 seconds False is expected
+        _, result = self.checker.evaluate(f'after("myplugin", 121)')
+        self.assertEqual(result, False)
 
 if __name__ == "__main__":
     unittest.main()
