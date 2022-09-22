@@ -111,9 +111,10 @@ class Checker():
         # if another plugin is given, compare them
         elif isinstance(since, str):
             df2 = self.backbone.get_measurements("sys.scheduler.plugin.lastexecution", last=True, _value=since)
-            # the other plugin has not run. Return False
+            # the other plugin has not run.
+            # we can assume the plugin has run since the other plugin that never ran. Return True
             if len(df2) < 1:
-                return False
+                return True
             p2 = df2.iloc[0]
             return p1.timestamp > p2.timestamp
         # if since is a number, use it to compare with the plugin

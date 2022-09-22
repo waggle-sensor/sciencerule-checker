@@ -50,9 +50,9 @@ class TestCheckerFunctions(unittest.TestCase):
         # Check if myplugin ran before. True is expected
         _, result = self.checker.evaluate(f'after("myplugin")')
         self.assertEqual(result, True)
-        # Check if myplugin ran before. True is expected
-        e, result = self.checker.evaluate(f'after("myplugin", since="notmyplugin)')
-        self.assertNotEqual(e, None)
+        # Check if myplugin ran before notmyplugin. since there is no record for notmyplugin True is expected
+        _, result = self.checker.evaluate(f'after("myplugin", since="notmyplugin")')
+        self.assertEqual(result, True)
         # Check if yourplugin has run since the last run of my plugin. True is expected
         _, result = self.checker.evaluate(f'after("yourplugin", since="myplugin")')
         self.assertEqual(result, True)
