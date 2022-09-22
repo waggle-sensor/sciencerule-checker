@@ -92,19 +92,35 @@ class Checker():
 
     def time(self, unit):
         try:
-            return datetime.datetime.now().__getattribute__(unit)
+            return datetime.datetime.now(datetime.timezone.utc).__getattribute__(unit)
         except:
             raise Exception(f'{unit} is not supported for time()')
 
     # after returns True/False based on the last successful execution of given plugin
     # it returns True if the last execution is earlier than now + interval and returns False otherwise
     # if no execution found, it returns False
-    def after(self, name, interval=0):
+    def after(self, name, since=None):
         now = datetime.datetime.now(datetime.timezone.utc)
         df = self.backbone.get_measurements("sys.scheduler.plugin.lastexecution", last=True, _value=name)
-        for _, p in df.iterrows():
-            return (now - datetime.timedelta(seconds=interval)) > p.timestamp
-        return False
+        # return False if plugin has not run
+        if len(df) < 1:
+            return False
+        p1 = df.iloc[0]
+        if since == None:
+            return now > p1.timestamp
+        # if another plugin is given, compare them
+        elif isinstance(since, str):
+            df2 = self.backbone.get_measurements("sys.scheduler.plugin.lastexecution", last=True, _value=since)
+            # the other plugin has not run. Return False
+            if len(df2) < 1:
+                return False
+            p2 = df2.iloc[0]
+            return p1.timestamp > p2.timestamp
+        # if since is a number, use it to compare with the plugin
+        elif isinstance(since, int):
+            return (now - datetime.timedelta(seconds=since)) > p1.timestamp
+        else:
+            return Exception("since parameter must be a plugin name or positive integer")
 
     def avg(self, array):
         return np.average(array)
