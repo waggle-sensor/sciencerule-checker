@@ -1,20 +1,49 @@
+from os import getenv
 import datetime
 import unittest
 
-from checker import Checker, FakeDataBackbone
+from checker import Checker, InfluxDataBackbone, FakeDataBackbone
+
+@unittest.skipIf(getenv("NODE_INFLUXDB_URL", "") == "", "No inlufxDB specified.")
+class TestCheckerWithRealBackend(unittest.TestCase):
+    def setUp(self):
+        self.backbone = InfluxDataBackbone(
+            getenv("NODE_INFLUXDB_URL", "http://wes-node-influxdb:8086"),
+            getenv("NODE_INFLUXDB_QUERY_TOKEN", ""))
+        self.checker = Checker(self.backbone)
+
+    def test_measurements(self):
+        measurements = [
+            {"timestamp": datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(seconds=100), "name": "env.temperature", "value": 15.1, "meta": {"sensor": "bme680"}},
+            {"timestamp": datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(seconds=1), "name": "env.temperature", "value": 23.1, "meta": {"sensor": "bme680"}},
+            {"timestamp": datetime.datetime.now(datetime.timezone.utc), "name": "env.temperature", "value": 41.2, "meta": {"sensor": "bme280"}},
+            {"timestamp": datetime.datetime.now(datetime.timezone.utc), "name": "sys.uptime", "value": 3700, "meta": {}},
+        ]
+        self.backbone.push_measurements(measurements=measurements)
+        # the avg returns 1 data point that its average is greater than 23
+        self.assertTrue(self.checker.evaluate("avg(v('env.temperature', sensor='bme680')) > 23")[1])
+        # the "since" returns 2 different data points that their average is less than 23
+        self.assertFalse(self.checker.evaluate("avg(v('env.temperature', since='-2m', sensor='bme680')) > 23")[1])
+        # swapping parameters other than measurement name should not affect the result.
+        self.assertFalse(self.checker.evaluate("avg(v('env.temperature', sensor='bme680', since='-2m')) > 23")[1])
 
 
 class TestCheckerFunctions(unittest.TestCase):
-    def test_simple(self):
+    def test_measurements(self):
         measurements = [
-            {"name": "env.temperature", "value": 23.1, "meta": {"sensor": "bme680"}},
-            {"name": "env.temperature", "value": 41.2, "meta": {"sensor": "bme280"}},
-            {"name": "sys.uptime", "value": 3700, "meta": {}},
+            {"timestamp": datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(seconds=100), "name": "env.temperature", "value": 15.1, "meta": {"sensor": "bme680"}},
+            {"timestamp": datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(seconds=1), "name": "env.temperature", "value": 23.1, "meta": {"sensor": "bme680"}},
+            {"timestamp": datetime.datetime.now(datetime.timezone.utc), "name": "env.temperature", "value": 41.2, "meta": {"sensor": "bme280"}},
+            {"timestamp": datetime.datetime.now(datetime.timezone.utc), "name": "sys.uptime", "value": 3700, "meta": {}},
         ]
         backbone = FakeDataBackbone(measurements)
         self.checker = Checker(backbone)
-        self.assertEqual(self.checker.evaluate("all(v('env.temperature', sensor='bme680') > 46)")[1], False)
-        self.assertEqual(self.checker.evaluate("avg(v('env.temperature', sensor='bme680')) > 22")[1], True)
+        # the avg returns 1 data point that its average is greater than 23
+        self.assertTrue(self.checker.evaluate("avg(v('env.temperature', sensor='bme680')) > 23")[1])
+        # the "since" returns 2 different data points that their average is less than 23
+        self.assertFalse(self.checker.evaluate("avg(v('env.temperature', since='-2m', sensor='bme680')) > 23")[1])
+        # swapping parameters other than measurement name should not affect the result.
+        self.assertFalse(self.checker.evaluate("avg(v('env.temperature', sensor='bme680', since='-2m')) > 23")[1])
 
     def test_time(self):
         self.checker = Checker(None)

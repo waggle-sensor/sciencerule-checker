@@ -7,6 +7,10 @@ import redis
 from flask import Flask, request
 from checker import Checker, InfluxDataBackbone
 
+from prometheus_client import start_http_server, Histogram
+
+REQUEST_TIME = Histogram('request_processing_seconds', 'Time spent processing request')
+
 app = Flask(__name__)
 port = getenv("SERVER_PORT", 5000)
 
@@ -30,7 +34,9 @@ def listrules():
         "rules": c.get_supported_funcs().keys()
     }
 
+
 @app.route("/evaluate", methods=["POST"])
+@REQUEST_TIME.time()
 def evaluate():
     if request.content_type == None or not request.content_type.startswith("application/json"):
         return generate_result("", False, "content_type must be application/json")
@@ -43,4 +49,5 @@ def evaluate():
         
 
 if __name__ == "__main__":
+    start_http_server(8000)
     app.run(host='0.0.0.0', port=port)
