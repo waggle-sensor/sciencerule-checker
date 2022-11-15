@@ -5,6 +5,20 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "Python: Debug Tests",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "purpose": ["debug-test"],
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "env": {
+                "NODE_INFLUXDB_URL": "http://localhost:8086",
+                "NODE_INFLUXDB_QUERY_TOKEN": "1tKyv4VFeUrw6El__YL_pCbqbZ4EUjb0Othw0aGeT1xl_d5oMI2Lt0FFFKMZ-vPrGLOGZZRqLSTj7KrI4Dgr7Q==",
+                "SERVER_PORT": "5002"
+            }
+          },
+        {
             "name": "Python: Current File",
             "type": "python",
             "request": "launch",
@@ -13,7 +27,7 @@
             "justMyCode": true,
             "env": {
                 "NODE_INFLUXDB_URL": "http://localhost:8086",
-                "NODE_INFLUXDB_QUERY_TOKEN": "Fao79FOJUjN72bihKj2v_t5y_WEpy2aQclywVqZCKa6GXEbdyWIyunLFQ6udwZtnkSBH9WZSBmCI9phqOmXyAw==",
+                "NODE_INFLUXDB_QUERY_TOKEN": "H9T3e3XCIyjXJlDEJle-NSCW1msiMpC8ZZmZR7QFG9Q4eiCffYglm5k9FpC1hzqyIPF3hLvTqN3EkG0wBLD-6A==",
                 "SERVER_PORT": "5002"
             }
         }

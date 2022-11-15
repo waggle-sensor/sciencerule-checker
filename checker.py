@@ -3,23 +3,44 @@ from typing import Tuple
 
 import numpy as np
 import pandas as pd
-from influxdb_client import InfluxDBClient
+from influxdb_client import InfluxDBClient, Point
+from influxdb_client.client.write_api import SYNCHRONOUS
 from croniter import croniter
 
 class DataBackbone():
-    def get_measurements(self, name, last=False, **meta) -> pd.DataFrame:
+    def get_measurements(self, name, since="-1m", last=False, **meta) -> pd.DataFrame:
         raise NotImplementedError()
 
 class FakeDataBackbone(DataBackbone):
     def __init__(self, measurements: list):
         self.data = pd.DataFrame(measurements)
 
-    def get_measurements(self, name, last=False, **meta) -> pd.DataFrame:
+    def _get_timedelta(self, since) -> datetime.timedelta:
+        if not isinstance(since, str):
+            raise Exception(f'{since} is not string')
+        if len(since) < 3:
+            raise Exception(f'{since}\'s length is too short')
+        unit = since[-1]
+        value = int(since[1:-1])
+        if unit == "s":
+            return datetime.timedelta(seconds=value)
+        elif unit == "m":
+            return datetime.timedelta(minutes=value)
+        elif unit == "h":
+            return datetime.timedelta(hours=value)
+        elif unit == "d":
+            return datetime.timedelta(days=value)
+        else:
+            raise Exception("Unit must be in [second, minute, hour, day]")
+
+    def get_measurements(self, name, since="-1m", last=False, **meta) -> pd.DataFrame:
+        delta = self._get_timedelta(since)
+        d = self.data[self.data.timestamp > datetime.datetime.now(datetime.timezone.utc) - delta]
         if meta.get("_value") not in [None, ""]:
             v = meta.pop("_value")
             meta["value"] = v
-            return self.data[(self.data.name==name) & (self.data.value==v)]
-        return self.data[self.data.name==name]
+            return d[(d.name==name) & (d.value==v)]
+        return d[d.name==name]
 
 class InfluxDataBackbone(DataBackbone):
     def __init__(self, influx_url, influx_token, influx_org='waggle', influx_bucket='waggle'):
@@ -39,10 +60,10 @@ class InfluxDataBackbone(DataBackbone):
             )
         return self.influx_client
 
-    def query_builder(self, name, last, **meta):
+    def query_builder(self, name, since, last, **meta):
         q = [
             f'from(bucket:"{self.influx_bucket}")',
-            'range(start: -7d)',
+            f'range(start: {since})',
             f'filter(fn: (r) => r["_measurement"] == "{name}")',
         ]
         for k, v in meta.items():
@@ -62,13 +83,41 @@ class InfluxDataBackbone(DataBackbone):
         df.loc[:, "meta"] = meta_df.apply(lambda row: self._add_meta(row), axis=1)
         return df
 
-    def get_measurements(self, name, last=False, **meta):
+    def get_measurements(self, name, since="-1m", last=False, **meta):
         client = self.get_influx_client()
-        query = self.query_builder(name, last, **meta)
+        query = self.query_builder(name, since, last, **meta)
         df = client.query_api().query_data_frame(query)
         if type(df) == list:
             df = pd.concat(df)
         return self.convert_to_api_record(df)
+
+    def _generate_point(self, measurement:dict):
+        if "name" not in measurement:
+            return "name not found"
+        if "value" not in measurement:
+            return "value not found"
+        p = Point(measurement["name"]).field("value", measurement["value"])
+        if "timestamp" in measurement:
+            p.time(measurement["timestamp"])
+        if "meta" in measurement:
+            for k, v in measurement["meta"].items():
+                p.tag(k, v)
+        return p
+
+    def push_measurements(self, measurements: list):
+        client = self.get_influx_client()
+        with client.write_api(write_options=SYNCHRONOUS) as write_api:
+            points = []
+            for m in measurements:
+                p = self._generate_point(m)
+                if isinstance(p, str):
+                    pass
+                else:
+                    points.append(p)
+            write_api.write(
+                bucket=self.influx_bucket,
+                org=self.influx_org,
+                record=points)
 
 # class RedixDataBackbone(DataBackbone):
 #     def __init__(self, redix_url):
@@ -145,11 +194,13 @@ class Checker():
         else:
             return False
 
-    def get_measurements(self, name, **meta):
-        df = self.backbone.get_measurements(name, **meta)
-        data = np.array([m["value"] for _, m in df.iterrows() if m["name"] == name and self.matchmeta(meta, m["meta"])])
+    def get_measurements(self, name, **kargs):
+        since = kargs.pop("since", "-1m")
+        last = kargs.pop("last", False)
+        df = self.backbone.get_measurements(name, since, last, **kargs)
+        data = np.array([m["value"] for _, m in df.iterrows() if m["name"] == name and self.matchmeta(kargs, m["meta"])])
         if len(data) < 1:
-            raise Exception(f'no data for {name} with meta {meta} found')
+            raise Exception(f'no data for {name} with meta {kargs} found')
         else:
             return data
 
