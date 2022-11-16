@@ -14,7 +14,7 @@
             "justMyCode": false,
             "env": {
                 "NODE_INFLUXDB_URL": "http://localhost:8086",
-                "NODE_INFLUXDB_QUERY_TOKEN": "1tKyv4VFeUrw6El__YL_pCbqbZ4EUjb0Othw0aGeT1xl_d5oMI2Lt0FFFKMZ-vPrGLOGZZRqLSTj7KrI4Dgr7Q==",
+                "NODE_INFLUXDB_QUERY_TOKEN": "5duFQTZ1IdQAeZ1LU5ESn-kmo-ZXHkfwtk-u3EyvZmSuvlhozPta1zpPClYksc2uxwizfAYk2BodhLKDAKoBSw==",
                 "SERVER_PORT": "5002"
             }
           },
