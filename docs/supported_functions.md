@@ -8,6 +8,8 @@
 v('env.temperature', sensor='bme680')
 # take average of temperature values from bme680
 avg(v('env.temperature', sensor='bme680'))
+# returns True if the total car counts in the last minute is greater than 5 cars
+sum(v("env.count.car", since="-1m")) > 5
 ```
 
 ## `time(unit)`
@@ -50,4 +52,15 @@ This function can be useful to create a dependency between programs. For example
 # a complete science rule
 # state: condition
 schedule("program_B"): after("program_A", since="program_B")
+```
+
+## `rate(measurement_name, since="-1m")`
+`rate` function returns an array of the per-second average rate of increase of the measurement. `since` controls the size of data. Larger value returns bigger data but takes longer. `rate` function works the best with counter-type values.
+
+```python
+# returns True if the summation of noise level changes in the last minute is greater than 30 dB
+sum(rate("env.sound.noise")) > 30
+# returns True if there is at least one per-second average of the raingauge accumulation that exceeds the threshold
+threshold_for_event_per_second = 0.0006
+any(rate("env.raingauge.event_acc", since="-5m") > threshold_for_event_per_second)
 ```

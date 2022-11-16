@@ -33,6 +33,10 @@ class FakeDataBackbone(DataBackbone):
         else:
             raise Exception("Unit must be in [second, minute, hour, day]")
 
+    def push_measurements(self, measurements: list):
+        df = pd.DataFrame(measurements)
+        self.data = self.data.append(df)
+
     def get_measurements(self, name, since="-1m", last=False, **meta) -> pd.DataFrame:
         delta = self._get_timedelta(since)
         d = self.data[self.data.timestamp > datetime.datetime.now(datetime.timezone.utc) - delta]
@@ -137,6 +141,7 @@ class Checker():
             "time": self.time,
             "cronjob": self.cronjob,
             "after": self.after,
+            "rate": self.rate,
         }
 
     def time(self, unit):
@@ -193,6 +198,16 @@ class Checker():
             return True
         else:
             return False
+    
+    def rate(self, name, **kargs):
+        since = kargs.pop("since", "-1m")
+        last = kargs.pop("last", False)
+        df = self.backbone.get_measurements(name, since, last, **kargs)
+        if len(df) < 1:
+            raise Exception(f'no data for {name} with meta {kargs} found')
+        # TODO: (Yongho) We may need to filter df by other meta keywords that the user put into this function
+        data = df["value"].diff() / df["timestamp"].diff().dt.total_seconds()
+        return data.fillna(0).to_numpy()
 
     def get_measurements(self, name, **kargs):
         since = kargs.pop("since", "-1m")
