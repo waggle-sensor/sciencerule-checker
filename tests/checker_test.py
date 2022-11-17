@@ -94,25 +94,27 @@ class TestCheckerFunctions(unittest.TestCase):
 
     def test_rate(self):
         measurements = [
-            {"timestamp": datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(seconds=290), "name": "env.raingauge.event_acc", "value": 13.0},
-            {"timestamp": datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(seconds=260), "name": "env.raingauge.event_acc", "value": 13.01},
-            {"timestamp": datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(seconds=230), "name": "env.raingauge.event_acc", "value": 13.02},
+            {"timestamp": datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(seconds=290), "name": "env.raingauge.total_acc", "value": 13.0},
+            {"timestamp": datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(seconds=260), "name": "env.raingauge.total_acc", "value": 13.01},
+            {"timestamp": datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(seconds=230), "name": "env.raingauge.total_acc", "value": 13.02},
         ]
         backbone = FakeDataBackbone(measurements)
         checker = Checker(backbone)
-        threshold_for_event_per_second = 0.0006
+        # we are looking for 3 mm per hour to consider it rains
+        threshold_for_event_per_minute = 3 / 60
         # the last 5 minutes raingauge event accumulation should be less than the threshold
-        _, result = checker.evaluate(f'any(rate("env.raingauge.event_acc", since="-5m") > {threshold_for_event_per_second})')
+        _, result = checker.evaluate(f'any(rate("env.raingauge.total_acc", since="-5m", window="1m") > {threshold_for_event_per_minute})')
         self.assertFalse(result)
         new_measurements = [
-            {"timestamp": datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(seconds=20), "name": "env.raingauge.event_acc", "value": 13.10},
-            {"timestamp": datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(seconds=15), "name": "env.raingauge.event_acc", "value": 13.11},
-            {"timestamp": datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(seconds=10), "name": "env.raingauge.event_acc", "value": 13.13},
-            {"timestamp": datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(seconds=5), "name": "env.raingauge.event_acc", "value": 13.15},
+            {"timestamp": datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(seconds=90), "name": "env.raingauge.total_acc", "value": 13.10},
+            {"timestamp": datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(seconds=61), "name": "env.raingauge.total_acc", "value": 13.11},
+            {"timestamp": datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(seconds=15), "name": "env.raingauge.total_acc", "value": 13.15},
+            {"timestamp": datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(seconds=10), "name": "env.raingauge.total_acc", "value": 13.19},
+            {"timestamp": datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(seconds=5), "name": "env.raingauge.total_acc", "value": 13.22},
         ]
         backbone.push_measurements(new_measurements)
-        # It rained in the last minute. The following rule should be valid
-        _, result = checker.evaluate(f'any(rate("env.raingauge.event_acc", since="-5m") > {threshold_for_event_per_second})')
+        # It rained a lot in the last minute. The following rule should be valid
+        _, result = checker.evaluate(f'any(rate("env.raingauge.total_acc", since="-5m", window="1m") > {threshold_for_event_per_minute})')
         self.assertTrue(result)
 
 

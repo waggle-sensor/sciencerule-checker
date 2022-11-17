@@ -10,6 +10,9 @@ from croniter import croniter
 class DataBackbone():
     def get_measurements(self, name, since="-1m", last=False, **meta) -> pd.DataFrame:
         raise NotImplementedError()
+    
+    def get_rate(self, name, since, window="1s", unit="1s", **meta) -> pd.DataFrame:
+        raise NotImplementedError()
 
 class FakeDataBackbone(DataBackbone):
     def __init__(self, measurements: list):
@@ -46,6 +49,20 @@ class FakeDataBackbone(DataBackbone):
             return d[(d.name==name) & (d.value==v)]
         return d[d.name==name]
 
+    def time_conversion_for_pandas(self, t) -> str:
+        if t[-1] == "s":
+            return t[:-1] + "S"
+        elif t[-1] == "m":
+            return t[:-1] + "min"
+        elif t[-1] == "h":
+            return t[:-1] + "H"
+        else:
+            return t
+
+    def get_rate(self, name, since, window="1s", unit="1s", **meta):
+        df = self.get_measurements(name, since, **meta)
+        return df.groupby(pd.Grouper(key="timestamp", freq=self.time_conversion_for_pandas(window))).mean().diff()
+       
 class InfluxDataBackbone(DataBackbone):
     def __init__(self, influx_url, influx_token, influx_org='waggle', influx_bucket='waggle'):
         self.influx_url = influx_url
@@ -64,7 +81,9 @@ class InfluxDataBackbone(DataBackbone):
             )
         return self.influx_client
 
-    def query_builder(self, name, since, last, **meta):
+    def query_builder(self, name, since, last, additional_queries=[], **meta):
+        headers = """import "experimental/aggregate"
+"""
         q = [
             f'from(bucket:"{self.influx_bucket}")',
             f'range(start: {since})',
@@ -72,9 +91,10 @@ class InfluxDataBackbone(DataBackbone):
         ]
         for k, v in meta.items():
             q.append(f'filter(fn: (r) => r["{k}"] == "{v}")')
+        q.extend(additional_queries)
         if last:
             q.append('last()')
-        return ' |> '.join(q)
+        return headers + ' |> '.join(q)
 
     def _add_meta(self, row: pd.Series):
         return row.to_dict()
@@ -90,6 +110,15 @@ class InfluxDataBackbone(DataBackbone):
     def get_measurements(self, name, since="-1m", last=False, **meta):
         client = self.get_influx_client()
         query = self.query_builder(name, since, last, **meta)
+        df = client.query_api().query_data_frame(query)
+        if type(df) == list:
+            df = pd.concat(df)
+        return self.convert_to_api_record(df)
+
+    def get_rate(self, name, since, window="1s", unit="1s", **meta):
+        client = self.get_influx_client()
+        aggregation = [f'aggregate.rate(every: {window}, unit: {unit})']
+        query = self.query_builder(name, since, last=False, additional_queries=aggregation, **meta)
         df = client.query_api().query_data_frame(query)
         if type(df) == list:
             df = pd.concat(df)
@@ -201,13 +230,15 @@ class Checker():
     
     def rate(self, name, **kargs):
         since = kargs.pop("since", "-1m")
-        last = kargs.pop("last", False)
-        df = self.backbone.get_measurements(name, since, last, **kargs)
-        if len(df) < 1:
+        window = kargs.pop("window", "1s")
+        unit = kargs.pop("unit", "1s")
+        df = self.backbone.get_rate(name, since, window, unit, **kargs)
+        # returned DataFrame only contains timestamp and value, no meta fields
+        data = np.array([m["value"] for _, m in df.iterrows()])
+        if len(data) < 1:
             raise Exception(f'no data for {name} with meta {kargs} found')
-        # TODO: (Yongho) We may need to filter df by other meta keywords that the user put into this function
-        data = df["value"].diff() / df["timestamp"].diff().dt.total_seconds()
-        return data.fillna(0).to_numpy()
+        else:
+            return data
 
     def get_measurements(self, name, **kargs):
         since = kargs.pop("since", "-1m")
