@@ -54,13 +54,19 @@ This function can be useful to create a dependency between programs. For example
 schedule("program_B"): after("program_A", since="program_B")
 ```
 
-## `rate(measurement_name, since="-1m")`
-`rate` function returns an array of the per-second average rate of increase of the measurement. `since` controls the size of data. Larger value returns bigger data but takes longer. `rate` function works the best with counter-type values.
+## `rate(measurement_name, since="-1m", window="1s", unit="1s")`
+`rate` function returns an array of the per-`window` average rate of increase of the measurement. `rate` function works with counter-type values.
+
+Input parameters are,
+- `since` controls the size of data
+- `window` determines number of bins in the time series data
+- `unit` specifies time window to calculate the average within each bin
 
 ```python
 # returns True if the summation of noise level changes in the last minute is greater than 30 dB
 sum(rate("env.sound.noise")) > 30
-# returns True if there is at least one per-second average of the raingauge accumulation that exceeds the threshold
-threshold_for_event_per_second = 0.0006
-any(rate("env.raingauge.event_acc", since="-5m") > threshold_for_event_per_second)
+# returns True if there is at least one per-5-minutes average of the raingauge accumulation that exceeds the threshold
+# threshold_for_event_per_minute represents the desired rate of raining and is calculated from the threshold of 3 mm per hour (moderate rain).
+threshold_for_event_per_minute = 0.25
+any(rate("env.raingauge.event_acc", since="-2h", window="5m", unit="5m") > threshold_for_event_per_minute)
 ```
